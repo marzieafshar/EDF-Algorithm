@@ -1,0 +1,51 @@
+[
+{
+"taskId": 1,
+"parentId": null,
+"releasedTime": 1,
+"executionTime": 5,
+"deadline": 10
+},
+{
+"taskId": 2,
+"parentId": 1,
+"releasedTime": 1,
+"executionTime": 4,
+"deadline": 22
+},
+{
+"taskId": 3,
+"parentId": 1,
+"releasedTime": 1,
+"executionTime": 6,
+"deadline": 20
+},
+{
+"taskId": 4,
+"parentId": 2,
+"releasedTime": 4,
+"executionTime": 2,
+"deadline": 25
+},
+{
+"taskId": 5,
+"parentId": 2,
+"releasedTime": 4,
+"executionTime": 3,
+"deadline": 25
+},
+{
+"taskId": 6,
+"parentId": 3,
+"releasedTime": 5,
+"executionTime": 1,
+"deadline": 16
+},
+{
+"taskId": 7,
+"parentId": 3,
+"releasedTime": 32,
+"executionTime": 2,
+"deadline": 40
+}
+]
