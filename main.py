@@ -1,6 +1,7 @@
 import json
 
-output = []
+input_nodes = []
+output_nodes = []
 
 
 class OutputNode:
@@ -11,18 +12,19 @@ class OutputNode:
         self.execution_times = execution_times
 
 
-def read_nodes_from_json(file):
-    return json.load(file)
+def read_nodes_from_input(file):
+    global input_nodes
+    json_file = open(file)
+    input_nodes = json.load(json_file)
 
 
-def find_task_by_id(task_id):
-    if task_id is None:
-        return None
-    for i in range(0, len(input_nodes)):
-        task = input_nodes[i]
-        if task['taskId'] == task_id:
-            return task
-    return None
+def initialize_tasks():
+    for node in input_nodes:
+        task_id = node['taskId']
+        task_new_released_time = find_new_release_time(task_id)
+        task_new_deadline = find_new_deadline(task_id)
+        new_output_node = OutputNode(task_id, task_new_released_time, task_new_deadline, [-1, -1])
+        output_nodes.append(new_output_node)
 
 
 def find_new_release_time(task_id):
@@ -34,108 +36,131 @@ def find_new_release_time(task_id):
     return max(task['releasedTime'], find_new_release_time(task_parent_id) + task_parent['executionTime'])
 
 
-def find_task_children(task_id):
-    task_children_ids = []
-    for i in range(0,len(input_nodes)):
-        node = input_nodes[i]
-        if node['parentId'] == task_id:
-            task_children_ids.append(node['taskId'])
-    return task_children_ids
+def find_task_by_id(task_id):
+    if task_id is None:
+        return None
+    for task in input_nodes:
+        if task['taskId'] == task_id:
+            return task
+    return None
 
 
 def find_new_deadline(task_id):
     task = find_task_by_id(task_id)
     task_children = find_task_children(task_id)
     task_new_deadline = task['deadline']
-    for i in range(0, len(task_children)):
-        task_child_id = task_children[i]
+    for task_child_id in task_children:
         task_child = find_task_by_id(task_child_id)
         task_new_deadline = min(task_new_deadline, find_new_deadline(task_child_id) - task_child['executionTime'])
     return task_new_deadline
 
 
-def initialize_tasks():
-    for i in range(0, len(input_nodes)):
-        node = input_nodes[i]
-        task_id = node['taskId']
-        task_new_released_time = find_new_release_time(task_id)
-        task_new_deadline = find_new_deadline(task_id)
-        new_output_node = OutputNode(task_id, task_new_released_time, task_new_deadline, [-1, -1])
-        output.append(new_output_node)
-
-
-def find_tasks_in_queue(time):
-    tasks_in_queue = []
-    for i in range(0, len(output)):
-        if output[i].released_time <= time and (output[i].execution_times[1] == -1):
-            tasks_in_queue.append(output[i])
-    return tasks_in_queue
-
-
-def find_output_task_by_id(id):
-    for i in range (len(output)):
-        if output[i].task_id == id:
-            return output[i]
-    return None
-
-
-def choose_executing_task(queue):
-    task = queue[0]
-    for i in range (1, len(queue)):
-        if queue[i].deadline < task.deadline:
-            task = queue[i]
-    return task.task_id
+def find_task_children(task_id):
+    task_children_ids = []
+    for node in input_nodes:
+        if node['parentId'] == task_id:
+            task_children_ids.append(node['taskId'])
+    return task_children_ids
 
 
 def order_tasks():
     time = -1
+    release_times = get_release_times()
     tasks_and_their_executed_times = {}
     executing_task_id = None
-    executing_time_of_executing_task = 0
     tasks_in_queue = []
     num_of_finished_tasks = 0
-    num_of_tasks = len(output)
+    num_of_tasks = len(output_nodes)
+
     while True:
         time = time + 1
-        if executing_task_id is not None:
-            executing_time_of_executing_task = executing_time_of_executing_task + 1
-            tasks_and_their_executed_times[executing_task_id] = executing_time_of_executing_task
-            if executing_time_of_executing_task == find_task_by_id(executing_task_id)['executionTime']:
-                find_output_task_by_id(executing_task_id).execution_times[1] = time
-                num_of_finished_tasks = num_of_finished_tasks + 1
-                executing_task_id = None
-                executing_time_of_executing_task = 0
-            tasks_in_queue = find_tasks_in_queue(time)
-            if len(tasks_in_queue) == 0: # Not all tasks are executed but now there is no task to execute
+        update_tasks_in_queue_based_on_release_times(release_times, tasks_in_queue, time)
+
+        if executing_task_id is None:
+            if num_of_finished_tasks == num_of_tasks:
+                break
+            if len(tasks_in_queue) == 0:
                 continue
-            if choose_executing_task(tasks_in_queue) != executing_task_id:
-                executing_task_id = choose_executing_task(tasks_in_queue)
-                if executing_task_id in tasks_and_their_executed_times:  # Task has been preempted before
-                    executing_time_of_executing_task = tasks_and_their_executed_times.get(executing_task_id)
-                else:  # It's the first time this task is being dispatched
-                    executing_time_of_executing_task = 0
-                    tasks_and_their_executed_times[executing_task_id] = 0
-                    find_output_task_by_id(executing_task_id).execution_times[0] = time
+            executing_task_id = choose_next_executing_task(tasks_and_their_executed_times, tasks_in_queue, time)
 
         else:
-            if num_of_finished_tasks == num_of_tasks: # All tasks are executed
-                break
-            tasks_in_queue = find_tasks_in_queue(time)
-            if len(tasks_in_queue) == 0: # Not all tasks are executed but now there is no task to execute
+            increment_executing_task_execution_time(executing_task_id, tasks_and_their_executed_times)
+            if is_task_finished(executing_task_id, tasks_and_their_executed_times):
+                set_task_execution_time(executing_task_id, time)
+                tasks_in_queue.remove(find_output_task_by_id(executing_task_id))
+                num_of_finished_tasks = num_of_finished_tasks + 1
+                executing_task_id = None
+            if len(tasks_in_queue) == 0:
                 continue
-            executing_task_id = choose_executing_task(tasks_in_queue)
-            if executing_task_id in tasks_and_their_executed_times: # Task has been preempted before
-                executing_time_of_executing_task = tasks_and_their_executed_times.get(executing_task_id)
-            else: # It's the first time this task is being dispatched
-                executing_time_of_executing_task = 0
-                tasks_and_their_executed_times[executing_task_id] = 0
-                find_output_task_by_id(executing_task_id).execution_times[0] = time
+            executing_task_id = choose_next_executing_task(tasks_and_their_executed_times, tasks_in_queue, time)
 
 
-json_file = open('Input.json')
-input_nodes = read_nodes_from_json(json_file)
+def get_release_times():
+    release_times = []
+    for node in output_nodes:
+        release_times.append(node.released_time)
+    release_times.sort(reverse=True)
+    return release_times
+
+
+def update_tasks_in_queue_based_on_release_times(release_times, tasks_in_queue, time):
+    if len(release_times) > 0 and time == release_times[-1]:
+        while len(release_times) > 0 and time == release_times[-1]:
+            release_times.pop()
+        tasks_in_queue.extend(get_released_tasks_by_release_time(time))
+
+
+def get_released_tasks_by_release_time(time):
+    released_tasks = []
+    for task in output_nodes:
+        if task.released_time == time:
+            released_tasks.append(task)
+    return released_tasks
+
+
+def choose_next_executing_task(tasks_and_their_executed_times, tasks_in_queue, time):
+    next_executing_task_id = choose_executing_task(tasks_in_queue)
+    if next_executing_task_id not in tasks_and_their_executed_times:
+        tasks_and_their_executed_times[next_executing_task_id] = 0
+        executing_task = find_output_task_by_id(next_executing_task_id)
+        executing_task.execution_times[0] = time
+    return next_executing_task_id
+
+
+def choose_executing_task(queue):
+    executing_task = queue[0]
+    for task in queue:
+        if task.deadline < executing_task.deadline:
+            executing_task = task
+    return executing_task.task_id
+
+
+def find_output_task_by_id(task_id):
+    for task in output_nodes:
+        if task.task_id == task_id:
+            return task
+    return None
+
+
+def increment_executing_task_execution_time(executing_task_id, tasks_and_their_executed_times):
+    tasks_and_their_executed_times[executing_task_id] = tasks_and_their_executed_times[executing_task_id] + 1
+
+
+def is_task_finished(executing_task_id, tasks_and_their_executed_times):
+    return tasks_and_their_executed_times[executing_task_id] == find_task_by_id(executing_task_id)['executionTime']
+
+
+def set_task_execution_time(executing_task_id, time):
+    find_output_task_by_id(executing_task_id).execution_times[1] = time
+
+
+def write_nodes_to_output(file):
+    json_output = json.dumps(output_nodes, default=vars, indent=2)
+    with open(file, 'w') as outfile:
+        outfile.write(json_output)
+
+
+read_nodes_from_input('Input.json')
 initialize_tasks()
 order_tasks()
-json_output = json.dumps(output, default=vars)
-with open('Output.json', 'w') as outfile:
-    outfile.write(json_output)
+write_nodes_to_output('Output.json')
