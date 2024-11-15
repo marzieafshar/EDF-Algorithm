@@ -73,12 +73,12 @@ def order_tasks():
     num_of_tasks = len(output_nodes)
 
     while True:
+        if num_of_finished_tasks == num_of_tasks:
+            break
         time = time + 1
         update_tasks_in_queue_based_on_release_times(release_times, tasks_in_queue, time)
 
         if executing_task_id is None:
-            if num_of_finished_tasks == num_of_tasks:
-                break
             if len(tasks_in_queue) == 0:
                 continue
             executing_task_id = choose_next_executing_task(tasks_and_their_executed_times, tasks_in_queue, time)
